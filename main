@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dino Jump: กระโดดหลบสิ่งกีดขวาง</title>
+    <style>
+        /* -------------------- CSS สำหรับเกม Dino Jump -------------------- */
+        body {
+            font-family: 'Press Start 2P', cursive, Arial, sans-serif; /* ฟอนต์สไตล์เกม Retro */
+            background-color: #f7f7f7;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden; /* ซ่อน scrollbar ถ้ามี */
+        }
+
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap'); /* import font */
+
+        .game-area {
+            width: 90%;
+            max-width: 800px;
+            height: 200px;
+            border: 2px solid #333;
+            background-color: #eee;
+            position: relative;
+            overflow: hidden; /* ซ่อนสิ่งกีดขวางที่อยู่นอกพื้นที่ */
+            margin-bottom: 20px;
+        }
+
+        #dino {
+            width: 40px;
+            height: 40px;
+            background-color: #66bb6a; /* สีเขียวเหมือนไดโนเสาร์ */
+            position: absolute;
+            bottom: 0; /* เริ่มต้นที่พื้น */
+            left: 50px;
+            border-radius: 5px; /* ทำให้ดูไม่เหลี่ยมจัด */
+            transition: bottom 0.2s ease-out; /* ทำให้กระโดดดู smooth */
+        }
+
+        #dino.jump {
+            animation: jump 0.6s ease-out forwards; /* animation สำหรับการกระโดด */
+        }
+
+        @keyframes jump {
+            0% { bottom: 0; }
+            50% { bottom: 100px; } /* จุดสูงสุดของการกระโดด */
+            100% { bottom: 0; }
+        }
+
+        .cactus {
+            width: 20px;
+            height: 40px;
+            background-color: #ff9800; /* สีส้มเหมือนกระบองเพชร */
+            position: absolute;
+            bottom: 0;
+            right: -20px; /* เริ่มต้นจากขวานอกจอ */
+            border-radius: 5px;
+            animation: moveCactus 2s linear infinite; /* เคลื่อนที่จากขวาไปซ้าย */
+        }
+
+        @keyframes moveCactus {
+            0% { right: -20px; }
+            100% { right: 100%; } /* เคลื่อนที่ไปจนสุดซ้าย */
+        }
+
+        #score {
+            font-size: 1.5em;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        #game-over {
+            font-size: 2em;
+            color: #e74c3c;
+            display: none; /* ซ่อนตอนแรก */
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px 40px;
+            border-radius: 10px;
+            z-index: 10;
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+        }
+
+        .controls button {
+            padding: 10px 20px;
+            font-size: 1.2em;
+            border: none;
+            border-radius: 8px;
+            background-color: #3498db;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .controls button:hover {
+            background-color: #2980b9;
+        }
+        .controls button.red {
+            background-color: #e74c3c;
+        }
+        .controls button.red:hover {
+            background-color: #c0392b;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="score">คะแนน: 0</div>
+    
+    <div class="game-area">
+        <div id="dino"></div>
+        <div id="cactus" class="cactus"></div>
+        <div id="game-over">Game Over!</div>
+    </div>
+
+    <div class="controls">
+        <button id="jump-button">กระโดด!</button>
+        <button id="restart-button">เล่นใหม่</button>
+        <a href="index.html" class="controls button red">กลับเมนูหลัก</a>
+    </div>
+
+    <script>
+        // -------------------- JavaScript สำหรับเกม Dino Jump --------------------
+        const dino = document.getElementById('dino');
+        const cactus = document.getElementById('cactus');
+        const scoreDisplay = document.getElementById('score');
+        const gameOverDisplay = document.getElementById('game-over');
+        const jumpButton = document.getElementById('jump-button');
+        const restartButton = document.getElementById('restart-button');
+
+        let score = 0;
+        let isGameOver = false;
+        let cactusSpeed = 2000; // ความเร็วเริ่มต้นของกระบองเพชร (ms)
+        let gameInterval;
+        let collisionDetectionInterval;
+
+        // ฟังก์ชันกระโดด
+        function jump() {
+            if (!isGameOver && !dino.classList.contains('jump')) {
+                dino.classList.add('jump');
+                setTimeout(() => {
+                    dino.classList.remove('jump');
+                }, 600); // ต้องเท่ากับ animation duration ของ jump
+            }
+        }
+
+        // ฟังก์ชันตรวจจับการชน
+        function checkCollision() {
+            const dinoRect = dino.getBoundingClientRect();
+            const cactusRect = cactus.getBoundingClientRect();
+
+            // ตรวจสอบว่าชนกันหรือไม่
+            if (
+                dinoRect.left < cactusRect.right &&
+                dinoRect.right > cactusRect.left &&
+                dinoRect.top < cactusRect.bottom &&
+                dinoRect.bottom > cactusRect.top &&
+                dinoRect.bottom > 0 // ตรวจสอบว่าไดโนยังอยู่บนพื้น (ไม่ได้กระโดดสูงเกิน)
+            ) {
+                gameOver();
+            }
+        }
+
+        // ฟังก์ชันเมื่อเกมโอเวอร์
+        function gameOver() {
+            isGameOver = true;
+            gameOverDisplay.style.display = 'block';
+            clearInterval(gameInterval); // หยุดการเคลื่อนที่ของกระบองเพชร
+            clearInterval(collisionDetectionInterval); // หยุดการตรวจจับการชน
+            cactus.style.animationPlayState = 'paused'; // หยุด animation ของกระบองเพชร
+            alert(`เกมจบแล้ว! คะแนนของคุณ: ${score}`); // แจ้งคะแนน
+        }
+
+        // ฟังก์ชันรีเซ็ตเกม
+        function resetGame() {
+            isGameOver = false;
+            score = 0;
+            scoreDisplay.textContent = 'คะแนน: 0';
+            gameOverDisplay.style.display = 'none';
+            cactus.style.animationPlayState = 'running';
+            cactus.style.animationDuration = `${cactusSpeed / 1000}s`; // รีเซ็ตความเร็ว
+            startGame(); // เริ่มเกมใหม่
+        }
+
+        // ฟังก์ชันเริ่มเกม
+        function startGame() {
+            if (isGameOver) resetGame();
+
+            // เพิ่มคะแนนทุก 100ms
+            gameInterval = setInterval(() => {
+                if (!isGameOver) {
+                    score++;
+                    scoreDisplay.textContent = `คะแนน: ${score}`;
+                }
+            }, 100);
+
+            // ตรวจจับการชนทุก 10ms
+            collisionDetectionInterval = setInterval(checkCollision, 10);
+        }
+
+        // Event Listeners
+        document.addEventListener('keydown', (event) => {
+            if (event.code === 'Space' || event.code === 'ArrowUp') {
+                jump();
+            }
+        });
+        jumpButton.addEventListener('click', jump);
+        restartButton.addEventListener('click', resetGame);
+
+        // เริ่มเกมเมื่อโหลดหน้า
+        startGame();
+
+    </script>
+</body>
+</html>
