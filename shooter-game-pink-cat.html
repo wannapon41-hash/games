@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pink Cat Shooter Game</title>
+    <style>
+        /* -------------------- CSS สำหรับเกมยิง (Pink Cat) -------------------- */
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #333;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            color: white;
+            overflow: hidden;
+        }
+
+        .game-area {
+            width: 600px;
+            height: 400px;
+            border: 5px solid #ff69b4; /* ขอบเขตสนามรบสีชมพู */
+            background-color: #000;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* ตัวละครผู้เล่น: แมวสีชมพู */
+        #player {
+            width: 45px; /* ใหญ่ขึ้นเล็กน้อย */
+            height: 45px;
+            background-color: #ff69b4; /* สีชมพู (Hot Pink) */
+            position: absolute;
+            bottom: 10px;
+            left: 280px;
+            border-radius: 50%; /* ทำให้เป็นวงกลมเหมือนหัวแมว */
+            border: 3px solid #fff;
+            box-shadow: 0 0 10px rgba(255, 105, 180, 0.7);
+            transition: background-color 0.1s;
+        }
+
+        /* กระสุน */
+        .bullet {
+            width: 5px;
+            height: 12px; /* ยาวขึ้นเล็กน้อย */
+            background-color: #fff; /* สีขาว */
+            position: absolute;
+            border-radius: 2px;
+            box-shadow: 0 0 5px #ff69b4;
+        }
+
+        /* ศัตรู */
+        .enemy {
+            width: 30px;
+            height: 30px;
+            background-color: #e74c3c; /* สีแดง */
+            position: absolute;
+            border-radius: 50%;
+        }
+
+        /* ข้อมูลเกม (Score/HP) */
+        .stats {
+            width: 600px;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+            color: #ff69b4;
+        }
+
+        #game-over-screen {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            text-align: center;
+            padding-top: 150px;
+            z-index: 100;
+        }
+        
+        #restart-button {
+            padding: 10px 20px;
+            font-size: 1.2em;
+            cursor: pointer;
+            background-color: #ff69b4;
+            border: none;
+            border-radius: 5px;
+            margin-top: 15px;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="stats">
+        <div id="score">คะแนน: 0</div>
+        <div id="health">HP: 100</div>
+    </div>
+
+    <div class="game-area" id="game-area">
+        <div id="player"></div>
+        
+        <div id="game-over-screen">
+            <h1>Game Over!</h1>
+            <p>คะแนนสุดท้ายของคุณ: <span id="final-score">0</span></p>
+            <button id="restart-button">เล่นใหม่</button>
+        </div>
+    </div>
+
+    <script>
+        // -------------------- JavaScript สำหรับ Game Logic (คงเดิม) --------------------
+        const gameArea = document.getElementById('game-area');
+        const player = document.getElementById('player');
+        const scoreDisplay = document.getElementById('score');
+        const healthDisplay = document.getElementById('health');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const restartButton = document.getElementById('restart-button');
+
+        // ค่าคงที่และตัวแปรเกม
+        const PLAYER_SPEED = 5;
+        const BULLET_SPEED = 7;
+        const ENEMY_SPEED = 1;
+        const GAME_WIDTH = 600;
+        const GAME_HEIGHT = 400;
+        const keys = {}; 
+        
+        let score = 0;
+        let health = 100;
+        let isGameOver = false;
+        let playerX = 280;
+        let playerY = 350;
+        let lastShotTime = 0;
+        const shotCooldown = 200; 
+
+        const bullets = [];
+        const enemies = [];
+        let gameLoopInterval;
+
+        // 1. การควบคุมการเคลื่อนไหวของผู้เล่น
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            if (e.code === 'Space') e.preventDefault(); 
+        });
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+
+        function updatePlayerPosition() {
+            if (isGameOver) return;
+            
+            // Movement (WASD และ Arrow Keys)
+            if (keys['ArrowLeft'] || keys['KeyA']) {
+                playerX = Math.max(0, playerX - PLAYER_SPEED);
+            }
+            if (keys['ArrowRight'] || keys['KeyD']) {
+                playerX = Math.min(GAME_WIDTH - player.offsetWidth, playerX + PLAYER_SPEED);
+            }
+            if (keys['ArrowUp'] || keys['KeyW']) {
+                playerY = Math.max(0, playerY - PLAYER_SPEED);
+            }
+            if (keys['ArrowDown'] || keys['KeyS']) {
+                playerY = Math.min(GAME_HEIGHT - player.offsetHeight, playerY + PLAYER_SPEED);
+            }
+            
+            player.style.left = `${playerX}px`;
+            player.style.top = `${playerY}px`;
+            
+            // การยิง (Spacebar)
+            if (keys['Space'] && (Date.now() - lastShotTime) > shotCooldown) {
+                shootBullet();
+                lastShotTime = Date.now();
+            }
+        }
+
+        // 2. การสร้างและจัดการกระสุน
+        function shootBullet() {
+            const bullet = document.createElement('div');
+            bullet.className = 'bullet';
+            
+            // ตำแหน่งเริ่มต้นของกระสุน (กลางผู้เล่น)
+            const bulletX = playerX + player.offsetWidth / 2 - 2.5; 
+            const bulletY = playerY;
+            
+            bullet.style.left = `${bulletX}px`;
+            bullet.style.top = `${bulletY}px`;
+            
+            gameArea.appendChild(bullet);
+            bullets.push({ element: bullet, x: bulletX, y: bulletY });
+        }
+
+        function updateBullets() {
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i];
+                bullet.y -= BULLET_SPEED;
+                bullet.element.style.top = `${bullet.y}px`;
+
+                if (bullet.y < 0) {
+                    gameArea.removeChild(bullet.element);
+                    bullets.splice(i, 1);
+                }
+            }
+        }
+
+        // 3. การสร้างและจัดการศัตรู
+        function spawnEnemy() {
+            const enemy = document.createElement('div');
+            enemy.className = 'enemy';
+            
+            const enemyX = Math.floor(Math.random() * (GAME_WIDTH - 30)); 
+            const enemyY = -30; 
+
+            enemy.style.left = `${enemyX}px`;
+            enemy.style.top = `${enemyY}px`;
+            
+            gameArea.appendChild(enemy);
+            enemies.push({ element: enemy, x: enemyX, y: enemyY });
+        }
+
+        let enemySpawnInterval;
+        function startEnemySpawn() {
+            enemySpawnInterval = setInterval(spawnEnemy, 1500);
+        }
+
+        function updateEnemies() {
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                enemy.y += ENEMY_SPEED; 
+                enemy.element.style.top = `${enemy.y}px`;
+
+                // ถ้าศัตรูชนผู้เล่น
+                if (checkCollision(player, enemy.element) && !isGameOver) {
+                    takeDamage();
+                    gameArea.removeChild(enemy.element);
+                    enemies.splice(i, 1);
+                    continue;
+                }
+
+                if (enemy.y > GAME_HEIGHT) {
+                    gameArea.removeChild(enemy.element);
+                    enemies.splice(i, 1);
+                }
+            }
+        }
+        
+        // 4. การตรวจจับการชน (Collision Detection)
+        function checkCollision(obj1, obj2) {
+            const rect1 = obj1.getBoundingClientRect();
+            const rect2 = obj2.getBoundingClientRect();
+            const gameAreaRect = gameArea.getBoundingClientRect();
+
+            const r1 = {
+                left: rect1.left - gameAreaRect.left,
+                right: rect1.right - gameAreaRect.left,
+                top: rect1.top - gameAreaRect.top,
+                bottom: rect1.bottom - gameAreaRect.top
+            };
+
+            const r2 = {
+                left: rect2.left - gameAreaRect.left,
+                right: rect2.right - gameAreaRect.left,
+                top: rect2.top - gameAreaRect.top,
+                bottom: rect2.bottom - gameAreaRect.top
+            };
+
+            return (
+                r1.left < r2.right &&
+                r1.right > r2.left &&
+                r1.top < r2.bottom &&
+                r1.bottom > r2.top
+            );
+        }
+
+        // 5. การจัดการการชนกันระหว่างกระสุนกับศัตรู
+        function checkBulletCollision() {
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i];
+                
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    const enemy = enemies[j];
+                    
+                    if (checkCollision(bullet.element, enemy.element)) {
+                        score += 10;
+                        scoreDisplay.textContent = `คะแนน: ${score}`;
+                        
+                        gameArea.removeChild(bullet.element);
+                        bullets.splice(i, 1); 
+                        
+                        gameArea.removeChild(enemy.element);
+                        enemies.splice(j, 1);
+                        
+                        break; 
+                    }
+                }
+            }
+        }
+        
+        // 6. การจัดการสุขภาพ
+        function takeDamage() {
+            health -= 10;
+            healthDisplay.textContent = `HP: ${health}`;
+            player.style.backgroundColor = '#fff'; // Feedback เมื่อโดนโจมตี
+            setTimeout(() => player.style.backgroundColor = '#ff69b4', 100);
+
+            if (health <= 0) {
+                gameOver();
+            }
+        }
+
+        // 7. Game Loop
+        function gameLoop() {
+            if (isGameOver) {
+                // ต้องเคลียร์ทั้งสอง Interval
+                clearInterval(enemySpawnInterval); 
+                return;
+            }
+
+            updatePlayerPosition();
+            updateBullets();
+            updateEnemies();
+            checkBulletCollision();
+
+            requestAnimationFrame(gameLoop); 
+        }
+
+        function gameOver() {
+            isGameOver = true;
+            finalScoreDisplay.textContent = score;
+            gameOverScreen.style.display = 'block';
+        }
+
+        // 8. การเริ่มต้นและรีเซ็ตเกม
+        function initGame() {
+            score = 0;
+            health = 100;
+            isGameOver = false;
+            playerX = 280;
+            playerY = 350;
+            
+            document.querySelectorAll('.bullet, .enemy').forEach(e => e.remove());
+            bullets.length = 0;
+            enemies.length = 0;
+            
+            player.style.left = `${playerX}px`;
+            player.style.top = `${playerY}px`;
+            scoreDisplay.textContent = `คะแนน: 0`;
+            healthDisplay.textContent = `HP: 100`;
+            player.style.backgroundColor = '#ff69b4';
+            gameOverScreen.style.display = 'none';
+
+            // เริ่ม loop
+            startEnemySpawn();
+            // ต้องเรียก gameLoop โดยใช้ requestAnimationFrame
+            requestAnimationFrame(gameLoop); 
+        }
+
+        restartButton.addEventListener('click', initGame);
+
+        // เริ่มต้นเกมเมื่อโหลดหน้า
+        initGame();
+
+    </script>
+</body>
+</html>
